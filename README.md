@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  <a href="https://img.shields.io/badge/version-0.1.0-blue"><img src="https://img.shields.io/badge/version-0.1.0-blue" alt="version"></a>
+  <a href="https://img.shields.io/badge/version-0.2.0-blue"><img src="https://img.shields.io/badge/version-0.2.0-blue" alt="version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
   <img src="https://img.shields.io/badge/python-3.8%2B-3776ab?logo=python&logoColor=white" alt="python">
   <img src="https://img.shields.io/badge/target-Flutter%20iOS%20%7C%20Android-02569b?logo=flutter&logoColor=white" alt="flutter">
-  <img src="https://img.shields.io/badge/tests-24%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-29%20passing-brightgreen" alt="tests">
 </p>
 
 <p align="center">
@@ -17,10 +17,12 @@
 </p>
 
 <p align="center">
-  <img src="assets/counter.gif" alt="Kite counter app running on a phone" width="270">
+  <img src="assets/quiz.gif" alt="KiteQuiz — a multi-screen app written in Kite" width="300">
   &nbsp;&nbsp;
-  <img src="assets/terminal.gif" alt="Running Kite in the terminal" width="440">
+  <img src="assets/quiz-terminal.gif" alt="Previewing every screen of KiteQuiz in the terminal" width="480">
 </p>
+<p align="center"><em>The KiteQuiz demo — a real multi-screen app (3 screens, <code>goto</code>
+navigation, custom components) previewed live in the terminal.</em></p>
 
 ---
 
@@ -28,11 +30,12 @@
 
 | | |
 |---|---|
-| 🪁 **Own syntax** | Not Python, not JS — keywords like `make`, `when`, `each`, `set`, `fix` designed to read like English |
-| 📱 **Mobile-first** | One `app` block + `state` variables = a reactive Flutter app. State changes rebuild the UI automatically |
-| ⚡ **Instant feedback** | `kite run` interprets on your machine — no build step, no waiting |
-| 🎯 **Small but complete** | Functions, closures, closures-in-closures, lists, maps, string interpolation, ranges, `when/else`, `while`, `each` loops |
-| 🔍 **Zero magic** | ~1,700 lines of readable Python: lexer → parser → interpreter → Dart transpiler |
+| 🪁 **Own syntax** | Not Python, not JS — keywords like `make`, `when`, `each`, `set`, `goto` designed to read like English |
+| 📱 **Mobile-first** | One `app` block + `state` = a reactive Flutter app. Multiple `screen`s with `goto`, `Scaffold`/`SafeArea` output |
+| 🔩 **Composable UI** | Write your own widget components (`make card(...) { ret ... }`) and reuse them anywhere |
+| ⚡ **Instant feedback** | `kite run` previews every screen of your app right in the terminal — no build, no waiting |
+| 🎯 **Small but complete** | Functions, closures, lists, maps, interpolation, ranges, `when/else`, `while`, `each`, `break`/`continue` |
+| 🔍 **Zero magic** | ~1,900 lines of readable Python: lexer → parser → interpreter → Dart transpiler |
 
 ## Quick start
 
@@ -44,14 +47,63 @@ cd kite
 python -m kite run examples/script.kite
 
 # preview a mobile app in your terminal
-python -m kite run examples/counter.kite
+python -m kite run examples/quiz.kite      # the multi-screen KiteQuiz app
 
 # compile to a real Flutter app
-python -m kite build examples/counter.kite -o counter.dart
+python -m kite build examples/quiz.kite -o quiz.dart
 # → copy into lib/main.dart of any Flutter project, then: flutter run
 ```
 
 Requires Python 3.8+. Building phone apps additionally requires [Flutter](https://docs.flutter.dev/get-started/install).
+
+## The flagship example — KiteQuiz
+
+[`examples/quiz.kite`](examples/quiz.kite) is a complete, multi-screen quiz
+app written in ~90 lines of Kite — no Flutter code, no controllers, no
+boilerplate:
+
+```kite
+// quiz.kite  (excerpt)
+app Quiz {
+  state qi = 0                    // which question we're on
+  state score = 0
+
+  set questions = [
+    #{ q: "What language created the World Wide Web?", a: 3, opts: [
+        #{ t: "Python", ok: false },  #{ t: "HTML", ok: false },
+        #{ t: "C", ok: false },       #{ t: "JavaScript", ok: true },
+    ] },
+    // ... more questions
+  ]
+
+  make optionBtn(label, ok) {      // your own widget component
+    ret btn(label) {
+      when ok { score += 1 }
+      when qi + 1 >= len(questions) { goto Result } else { qi += 1 }
+    }
+  }
+
+  screen Home { col {
+    text("KiteQuiz", 42, "#5E5CE6")
+    btn("Start the quiz", "#35B88E") { qi = 0; score = 0; goto Quiz }
+  } }
+
+  screen Results { col {
+    text("{score} / {len(questions)} correct", 22, "#35B88E")
+    bar(score / len(questions))                   // progress bar
+    btn("Play again") { qi = 0; score = 0; goto Home }
+  } }
+}
+```
+
+It uses three named `screen`s with `goto` navigation, a custom `optionBtn`
+component reused inside an `each` loop, styled `text`, and a `bar` progress
+widget — try it:
+
+```bash
+python -m kite run examples/quiz.kite        # preview all screens at once
+python -m kite build examples/quiz.kite -o quiz.dart   # compile to Flutter
+```
 
 ## Hello, app
 
@@ -75,7 +127,8 @@ app Counter {
 ```
 
 That's the whole app. `kite build` turns it into a Flutter `StatefulWidget`
-with proper `setState` wiring.
+wrapped in `Scaffold`/`SafeArea`, with every `btn` body wired through
+`setState` — your UI rebuilds whenever state changes.
 
 ## Language tour
 
@@ -146,10 +199,54 @@ print(len(user))                 // => 2
 | `col { … }` | `Column` |
 | `row { … }` | `Row` |
 | `text(s)` | `Text` |
+| `text(s, size)` / `text(s, size, "#color")` | `Text` with `TextStyle` |
 | `btn(label) { … }` | `ElevatedButton` wrapped in `setState` |
+| `btn(label, "#color")` | colored `ElevatedButton` |
 | `input(hint)` | `TextField` |
 | `img(url)` | `Image.network` |
 | `spacer(n)` | `SizedBox(height: n)` |
+| `bar(fraction)` | `LinearProgressIndicator` |
+
+### Multi-screen apps
+
+Give each `screen` a name and jump between them with `goto`:
+
+```kite
+app Nav {
+  state n = 0
+  screen Home { col {
+    text("Welcome!")
+    btn("Go") { goto About }
+  } }
+  screen About { col {
+    text("This is the about screen")
+    btn("Back") { goto Home }
+  } }
+}
+```
+
+`goto` compiles to `setState`, screens render through `Scaffold`/`SafeArea`,
+and `kite run` previews every screen in your terminal at once.
+
+### Custom widget components
+
+Write a component once with `make`, return a widget with `ret`, reuse it anywhere:
+
+```kite
+make optionBtn(label, picked) {
+  ret btn(label) {
+    when picked { score += 1 }
+  }
+}
+
+screen Quiz {
+  col {
+    each opt in options {
+      optionBtn(opt.label, opt.picked)
+    }
+  }
+}
+```
 
 Loops and conditionals work inside widgets too — they compile to Dart's
 collection-`for` / collection-`if`:
@@ -212,8 +309,13 @@ kite/
 ├── examples/
 │   ├── script.kite       # fib, loops, maps — runs in the interpreter
 │   ├── counter.kite      # reactive counter app
-│   └── todo.kite         # list UI with loops inside widgets
-├── tests/test_kite.py    # 24 tests, zero dependencies
+│   ├── todo.kite         # list UI with loops inside widgets
+│   └── quiz.kite         # ⭐ KiteQuiz — multi-screen app (goto + components)
+├── assets/               # README images & GIFs (generated)
+│   ├── logo.png · banner.png
+│   ├── counter.gif · terminal.gif
+│   └── quiz.gif · quiz-terminal.gif
+├── tests/test_kite.py    # 29 tests, zero dependencies
 ├── scripts/make_assets.py
 └── DESIGN.md             # the language spec
 ```
@@ -226,15 +328,18 @@ python tests/test_kite.py        # plain Python, no pytest needed
 pytest tests/ -q
 ```
 
-24 tests cover lexing, parsing, arithmetic, closures, control flow, data
-structures, error messages, and the Dart output.
+29 tests cover lexing, parsing, arithmetic, closures, control flow, data
+structures, error messages, multi-screen navigation, custom components, and
+the Dart output.
 
 ## Roadmap
 
+- [x] Multi-screen apps: named `screen`s + `goto` navigation
+- [x] Custom widget components (`make myCard(...) { ret ... }`)
+- [x] `bar` progress widget, styled `text`/`btn`
 - [ ] `when` guards on maps/lists (`has`, pattern matching)
 - [ ] Classes / structs with methods
 - [ ] Hot reload — watch a `.kite` file and rebuild the Dart output
-- [ ] Custom widget definitions (`make myCard(...) { … }` returning widgets)
 - [ ] Publish to PyPI as `kite-lang`
 
 ## License

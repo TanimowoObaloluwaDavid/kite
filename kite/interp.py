@@ -27,6 +27,64 @@ class KiteFunction:
         return f"<fn {name}>"
 
 
+WIDGET_NAMES = {"col", "row", "text", "btn", "input", "img", "spacer", "bar"}
+
+
+class WidgetVal:
+    """A widget evaluated in the interpreter (preview)."""
+
+    def __init__(self, kind, args=None, children=None, action=None):
+        self.kind = kind
+        self.args = args or []
+        self.children = children or []
+        self.action = action  # KiteFunction for btn, or None
+
+    def __repr__(self):
+        return f"<widget {self.kind}>"
+
+
+def render_widget(w, pad):
+    """WidgetVal -> list of preview lines."""
+    if not isinstance(w, WidgetVal):
+        return []
+    k = w.kind
+    if k == "goto":
+        return [f"{pad}-> goto {w.args[0]}"]
+    if k in ("col", "row"):
+        lines = [f"{pad}{k} {{"]
+        for c in w.children:
+            lines.extend(render_widget(c, pad + "  "))
+        lines.append(f"{pad}}}")
+        return lines
+    if k == "text":
+        extra = ""
+        if len(w.args) > 1:
+            extra = f"  [size {fmt(w.args[1])}]"
+        if len(w.args) > 2:
+            extra += f" [color {fmt(w.args[2])}]"
+        return [f"{pad}text: {fmt(w.args[0]) if w.args else ''}{extra}"]
+    if k == "btn":
+        label = fmt(w.args[0]) if w.args else "?"
+        if w.action is not None:
+            return [f"{pad}btn: {label}"]
+        return [f"{pad}btn: {label}"]
+    if k == "input":
+        hint = fmt(w.args[0]) if w.args else ""
+        return [f"{pad}input: {hint}"]
+    if k == "img":
+        return [f"{pad}img: {fmt(w.args[0]) if w.args else ''}"]
+    if k == "spacer":
+        n = fmt(w.args[0]) if w.args else "8"
+        return [f"{pad}spacer: {n}"]
+    if k == "bar":
+        pct = 0
+        if w.args and numlike(w.args[0]):
+            pct = max(0, min(100, round(w.args[0] * 100)))
+        filled = round(pct / 5)
+        return [f"{pad}bar: [{'#' * filled}{'-' * (20 - filled)}] {pct}%"]
+    return [f"{pad}<{k}>"]
+
+
 class Env:
     def __init__(self, parent=None):
         self.vars = {}
@@ -260,74 +318,51 @@ class Interpreter:
         app_env = Env(env)
         for s in states:
             app_env.define(s.name, self.eval(s.value, app_env))
-        print(f"--- app {node.name} (preview) ---")
-        for s in screens:
-            for stmt in s.body.stmts:
-                tree = self.preview_stmt(stmt, app_env, "  ")
-                if tree:
-                    print(tree)
+        print(f"--- app {node.name} · {len(screens)} screen(s) ---")
+        for i, s in enumerate(screens):
+            label = s.name or ("screen" if len(screens) == 1 else f"screen{i}")
+            print(f"--- {label} ---")
+            for w in self.eval_widget_block(s.body, app_env, None):
+                for line in render_widget(w, "  "):
+                    print(line)
         print("--- end preview ---")
 
-    def preview_stmt(self, stmt, env, pad):
-        if not isinstance(stmt, A.ExprStmt):
-            self.exec(stmt, env)
-            return None
-        return self.preview_expr(stmt.expr, env, pad)
-
-    def preview_expr(self, expr, env, pad):
-        if not isinstance(expr, A.Call):
-            return None
-        callee = expr.callee
-        name = callee.name if isinstance(callee, A.Ident) else None
-        if name == "text":
-            val = self.eval(expr.args[0], env) if expr.args else ""
-            return f"{pad}text: {fmt(val)}"
-        if name == "btn":
-            label = self.eval(expr.args[0], env) if expr.args else "?"
-            return f"{pad}btn: {fmt(label)}"
-        if name == "input":
-            hint = self.eval(expr.args[0], env) if expr.args else ""
-            return f"{pad}input: {fmt(hint)}"
-        if name == "img":
-            src = self.eval(expr.args[0], env) if expr.args else ""
-            return f"{pad}img: {fmt(src)}"
-        if name == "spacer":
-            n = self.eval(expr.args[0], env) if expr.args else 8
-            return f"{pad}spacer: {n}"
-        if name in ("col", "row"):
-            lines = [f"{pad}{name} {{"]
-            if expr.block:
-                for s in expr.block.stmts:
-                    if isinstance(s, A.ExprStmt):
-                        t = self.preview_expr(s.expr, env, pad + "  ")
-                        if t:
-                            lines.append(t)
-                    elif isinstance(s, A.Each):
-                        it = self.eval(s.iterable, env)
-                        if isinstance(it, dict):
-                            it = list(it.keys())
-                        for item in it:
-                            loop_env = Env(env)
-                            loop_env.define(s.var, item)
-                            for bs in s.body.stmts:
-                                if isinstance(bs, A.ExprStmt):
-                                    t = self.preview_expr(bs.expr, loop_env,
-                                                          pad + "  ")
-                                    if t:
-                                        lines.append(t)
-                    elif isinstance(s, A.When):
-                        if is_truthy(self.eval(s.cond, env)):
-                            for bs in s.then.stmts:
-                                if isinstance(bs, A.ExprStmt):
-                                    t = self.preview_expr(bs.expr, env,
-                                                          pad + "  ")
-                                    if t:
-                                        lines.append(t)
-                    elif isinstance(s, (A.Set, A.Assign, A.Fix)):
-                        self.exec(s, env)
-            lines.append(f"{pad}}}")
-            return "\n".join(lines)
-        return None
+    def eval_widget_block(self, block, env, out=None):
+        """Evaluate a widget block: collects WidgetVals, runs state changes."""
+        if out is None:
+            out = []
+        for s in block.stmts:
+            if isinstance(s, A.ExprStmt):
+                v = self.eval(s.expr, env)
+                if isinstance(v, WidgetVal):
+                    out.append(v)
+            elif isinstance(s, A.Goto):
+                out.append(WidgetVal("goto", [s.target]))
+            elif isinstance(s, (A.Set, A.Assign, A.Fix)):
+                self.exec(s, env)
+            elif isinstance(s, A.Each):
+                it = self.eval(s.iterable, env)
+                if isinstance(it, dict):
+                    it = list(it.keys())
+                if isinstance(it, (str, list)):
+                    for item in list(it):
+                        loop_env = Env(env)
+                        loop_env.define(s.var, item)
+                        self.eval_widget_block(s.body, loop_env, out)
+            elif isinstance(s, A.When):
+                if is_truthy(self.eval(s.cond, env)):
+                    self.eval_widget_block(s.then, env, out)
+                elif s.other is not None:
+                    if isinstance(s.other, A.When):
+                        self.eval_widget_block(
+                            A.Block(stmts=[s.other]), env, out)
+                    else:
+                        self.eval_widget_block(s.other, env, out)
+            elif isinstance(s, A.Make):
+                self.exec(s, env)
+            else:
+                self.exec(s, env)
+        return out
 
     # --- expressions ---
 
@@ -444,6 +479,9 @@ class Interpreter:
         raise KiteError(f"unknown operator '{op}'", node.line, node.col)
 
     def eval_Call(self, node, env):
+        callee = node.callee
+        if isinstance(callee, A.Ident) and callee.name in WIDGET_NAMES:
+            return self.eval_widget(node, env)
         callee = self.eval(node.callee, env)
         args = [self.eval(a, env) for a in node.args]
         if isinstance(callee, KiteFunction):
@@ -468,6 +506,24 @@ class Interpreter:
                                 node.line, node.col)
         raise KiteError(f"{type_name(callee)} is not callable",
                         node.line, node.col)
+
+    def eval_widget(self, node, env):
+        kind = node.callee.name
+        args = [self.eval(a, env) for a in node.args]
+        if kind == "btn":
+            action = None
+            if node.block is not None:
+                action = KiteFunction(
+                    A.Make(params=[], body=node.block, name=None), env)
+            return WidgetVal("btn", args, action=action)
+        if kind in ("col", "row"):
+            children = self.eval_widget_block(node.block, env) \
+                if node.block is not None else []
+            return WidgetVal(kind, args, children=children)
+        if node.block is not None:
+            raise KiteError(f"{kind} does not take a block",
+                            node.line, node.col)
+        return WidgetVal(kind, args)
 
     def eval_Index(self, node, env):
         obj = self.eval(node.obj, env)
@@ -615,6 +671,8 @@ def type_name(v):
         return "map"
     if isinstance(v, KiteFunction):
         return "fn"
+    if isinstance(v, WidgetVal):
+        return "widget"
     if callable(v):
         return "builtin"
     return type(v).__name__
@@ -635,6 +693,8 @@ def fmt(v):
         return "#{" + ", ".join(f"{k}: {fmt(x)}" for k, x in v.items()) + "}"
     if isinstance(v, KiteFunction):
         return repr(v)
+    if isinstance(v, WidgetVal):
+        return f"<{v.kind}>"
     if callable(v):
         return "<builtin>"
     return str(v)

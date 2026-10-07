@@ -98,6 +98,9 @@ app Counter {
 }
 ```
 
+A `screen` may be named (`screen Home { }`); multiple named screens are a
+state machine — `goto Home` switches screens and triggers a rebuild.
+
 Widgets:
 
 | Kite          | Flutter                    |
@@ -105,12 +108,18 @@ Widgets:
 | `col { }`     | `Column`                   |
 | `row { }`     | `Row`                      |
 | `text(s)`     | `Text`                     |
+| `text(s, size)` / `text(s, size, "#hex")` | `Text` + `TextStyle` |
 | `btn(s) { }`  | `ElevatedButton` + setState|
+| `btn(s, "#hex")` | `ElevatedButton.styleFrom` |
 | `input(h)`    | `TextField`                |
 | `img(url)`    | `Image.network`            |
 | `spacer(n)`   | `SizedBox(height: n)`      |
+| `bar(frac)`   | `LinearProgressIndicator`  |
 
 A widget takes a trailing block for children (`col`) or an action (`btn`).
+
+User-defined components: `make foo(a, b) { ret col { … } }` — the value
+`ret`urned is spliced into any `col`/`row` where `foo(...)` is called.
 
 ## 6. Commands
 
@@ -134,7 +143,8 @@ stmt       := "set" IDENT "=" expr
             | "break" | "continue"
             | "app" IDENT "{" (state | screen | stmt)* "}"
             | "state" IDENT "=" expr
-            | "screen" block
+            | "screen" IDENT? block
+            | "goto" IDENT
             | expr ("="|"+="|"-="|"*="|"/=") expr
             | expr
 block      := "{" stmt* "}"

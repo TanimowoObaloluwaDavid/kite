@@ -106,10 +106,17 @@ class Parser:
                 return self.app_stmt()
             if t.value == "state":
                 return self.state_stmt()
+            if t.value == "goto":
+                self.next()
+                target = self.expect("ID", what="screen name")
+                return A.Goto(target=target.value, line=t.line, col=t.col)
             if t.value == "screen":
                 self.next()
+                name = ""
+                if self.at("ID"):
+                    name = self.next().value
                 b = self.block()
-                return A.Screen(body=b, line=t.line, col=t.col)
+                return A.Screen(body=b, name=name, line=t.line, col=t.col)
         return self.expr_stmt()
 
     def set_stmt(self):
@@ -159,7 +166,7 @@ class Parser:
         t = self.next()
         value = None
         if self.at_expr_start():
-            value = self.expr(allow_block=False)
+            value = self.expr(allow_block=True)
         return A.Ret(value=value, line=t.line, col=t.col)
 
     def when_stmt(self):
@@ -267,6 +274,8 @@ class Parser:
                             self.next()
                         else:
                             break
+                        if self.at("RP"):
+                            break
                 self.expect("RP", what="')'")
                 node = A.Call(callee=node, args=args, line=t.line, col=t.col)
             elif t.type == "LBRACKET":
@@ -339,6 +348,8 @@ class Parser:
                     self.next()
                 else:
                     break
+                if self.at("RBRACKET"):
+                    break
         self.expect("RBRACKET", what="']'")
         return A.ListLit(items=items, line=start.line, col=start.col)
 
@@ -354,6 +365,8 @@ class Parser:
                 if self.at("OP", ","):
                     self.next()
                 else:
+                    break
+                if self.at("RBRACE"):
                     break
         self.expect("RBRACE", what="'}'")
         return A.MapLit(entries=entries, line=start.line, col=start.col)

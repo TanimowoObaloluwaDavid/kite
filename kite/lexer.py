@@ -12,7 +12,7 @@ class KiteError(Exception):
 KEYWORDS = {
     "set", "fix", "make", "ret", "when", "else", "while", "each", "in",
     "break", "continue", "and", "or", "not", "is", "isnt", "nil",
-    "true", "false", "app", "state", "screen",
+    "true", "false", "app", "state", "screen", "goto",
 }
 
 TWO_CHAR = {"+=", "-=", "*=", "/=", "==", "!=", "<=", ">=", ".."}

@@ -1,0 +1,95 @@
+# KiteQuiz — a multi-screen quiz app built with Kite v0.2
+#
+# Features that show off the language:
+#   - 3 named screens with `goto` navigation between them
+#   - app-level `state` + `make` custom widget components
+#   - `each` over lists to generate buttons, `when` for logic
+#   - `bar` widget for progress, text size/color styling
+
+app Quiz {
+  state qi = 0
+  state score = 0
+
+  set questions = [
+    #{ q: "What language originally created the World Wide Web?", opts: [
+        #{ t: "Python", ok: false },
+        #{ t: "HTML", ok: false },
+        #{ t: "C", ok: false },
+        #{ t: "JavaScript", ok: true },
+      ], a: 3 },
+    #{ q: "Which of these is a String method in Kite?", opts: [
+        #{ t: "upper()", ok: true },
+        #{ t: "flip()", ok: false },
+        #{ t: "swap()", ok: false },
+        #{ t: "reverse()", ok: false },
+      ], a: 0 },
+  ]
+
+  make optionBtn(label, ok) {
+    ret btn(label, "#5E5CE6") {
+      when ok { score += 1 }
+      when qi + 1 >= len(questions) { goto Result } else { qi += 1 }
+    }
+  }
+
+  make header(title) {
+    ret col {
+      text(title, 30, "#24292F")
+      spacer(12)
+    }
+  }
+
+  screen Home {
+    col {
+      spacer(48)
+      text("KiteQuiz", 42, "#5E5CE6")
+      spacer(8)
+      text("A multi-screen app written in Kite", 16)
+      spacer(24)
+      btn("Start the quiz", "#35B88E") {
+        qi = 0
+        score = 0
+        goto Quiz
+      }
+    }
+  }
+
+  screen Quiz {
+    col {
+      header("#{qi + 1} of #{len(questions)}")
+      bar((qi + 1) / len(questions))
+      spacer(16)
+      text(questions[qi].q, 20, "#24292F")
+      spacer(16)
+      each opt in questions[qi].opts {
+        optionBtn(opt.t, opt.ok)
+        spacer(6)
+      }
+      spacer(8)
+      text("Score: #{score}", 16)
+    }
+  }
+
+  screen Result {
+    col {
+      spacer(48)
+      text("Quiz complete", 32, "#24292F")
+      spacer(8)
+      text("#{score} / #{len(questions)} correct", 22, "#35B88E")
+      spacer(12)
+      bar(score / len(questions))
+      spacer(24)
+      when score >= 2 {
+        text("Excellent work!", 18)
+      } else {
+        text("Keep practising!", 18)
+      }
+      spacer(24)
+      btn("Play again", "#5E5CE6") {
+        qi = 0
+        score = 0
+        goto Home
+      }
+    }
+  }
+}

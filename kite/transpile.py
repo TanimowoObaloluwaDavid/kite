@@ -3,7 +3,14 @@
 from .lexer import KiteError
 from . import ast as A
 
-WIDGETS = {"col", "row", "text", "btn", "input", "img", "spacer"}
+WIDGETS = {"col", "row", "text", "btn", "input", "img", "spacer", "bar"}
+
+def dart_color(s):
+    """'#ff5f57' -> Color(0xFFff5f57)."""
+    h = s.lstrip("#").lstrip("0x")
+    if len(h) == 6:
+        h = "FF" + h
+    return f"Color(0x{h})"
 
 IND = "  "
 
@@ -61,7 +68,7 @@ class Transpiler:
         return out
 
     def s_Set(self, node, ind):
-        return [f"{P(ind)}var {node.name} = {self.expr(node.value)};"]
+        return [f"{P(ind)}dynamic {node.name} = {self.expr(node.value)};"]
 
     def s_Fix(self, node, ind):
         return [f"{P(ind)}final {node.name} = {self.expr(node.value)};"]
@@ -144,6 +151,17 @@ class Transpiler:
 
     # --- app / state / screen ---
 
+    def screen_expr(self, screen, ind):
+        """Compile a screen body into one widget expression."""
+        stmts = screen.body.stmts
+        if len(stmts) == 1 and isinstance(stmts[0], A.ExprStmt):
+            return self.expr(stmts[0].expr, ind=ind, in_widget=True)
+        elems = self.collection_elems(stmts, ind + 1)
+        inner = (",\n" + P(ind + 2)).join(elems)
+        return (f"Column(\n{P(ind + 1)}children: [\n"
+                f"{P(ind + 2)}{inner},\n"
+                f"{P(ind + 1)}],\n{P(ind)})")
+
     def s_App(self, node, ind):
         self.app_count += 1
         is_main = self.app_count == 1
@@ -154,7 +172,17 @@ class Transpiler:
         if not screens:
             raise KiteError(f"app '{node.name}' has no screen {{ }} block",
                             node.line, node.col)
+        names = []
+        for i, s in enumerate(screens):
+            nm = s.name or ("Main" if len(screens) == 1 else f"Screen{i}")
+            if nm in names:
+                raise KiteError(f"duplicate screen name '{nm}'",
+                                s.line, s.col)
+            names.append(nm)
+            s.name = nm
+        self.screen_names = set(names)
         cls = node.name
+        multi = len(screens) > 1
         out = []
         out.append(f"{P(ind)}class {cls} extends StatefulWidget {{")
         out.append(f"{P(ind + 1)}const {cls}({{super.key}});")
@@ -163,23 +191,36 @@ class Transpiler:
         out.append(f"{P(ind)}}}")
         out.append("")
         out.append(f"{P(ind)}class _{cls}State extends State<{cls}> {{")
+        if multi:
+            out.append(f'{P(ind + 1)}dynamic __nav = "{names[0]}";')
         for s in states:
-            out.append(f"{P(ind + 1)}var {s.name} = {self.expr(s.value)};")
+            out.append(f"{P(ind + 1)}dynamic {s.name} = {self.expr(s.value)};")
         for s in others:
             for line in self.stmt(s, ind + 1):
                 out.append(line)
         out.append(f"{P(ind + 1)}@override")
         out.append(f"{P(ind + 1)}Widget build(BuildContext context) {{")
-        stmts = screens[0].body.stmts
-        if len(stmts) == 1 and isinstance(stmts[0], A.ExprStmt):
-            w = self.expr(stmts[0].expr, ind=ind + 2, in_widget=True)
+        if multi:
+            out.append(f"{P(ind + 2)}Widget body;")
+            for i, s in enumerate(screens):
+                kw = "if" if i == 0 else "else if"
+                out.append(f'{P(ind + 2)}{kw} (__nav == "{s.name}") {{')
+                out.append(f"{P(ind + 3)}body = "
+                           f"{self.screen_expr(s, ind + 4)};")
+                out.append(f"{P(ind + 2)}}}")
+            out.append(f"{P(ind + 2)}else {{")
+            out.append(f"{P(ind + 3)}body = "
+                       f"{self.screen_expr(screens[-1], ind + 4)};")
+            out.append(f"{P(ind + 2)}}}")
+            child = "body"
         else:
-            elems = self.collection_elems(stmts, ind + 3)
-            inner = (",\n" + P(ind + 4)).join(elems)
-            w = f"Column(\n{P(ind + 3)}children: [\n" \
-                f"{P(ind + 4)}{inner},\n" \
-                f"{P(ind + 3)}],\n{P(ind + 2)})"
-        out.append(f"{P(ind + 2)}return {w};")
+            child = None
+        w = child or self.screen_expr(screens[0], ind + 4)
+        out.append(f"{P(ind + 2)}return Scaffold(")
+        out.append(f"{P(ind + 3)}body: SafeArea(")
+        out.append(f"{P(ind + 4)}child: {w},")
+        out.append(f"{P(ind + 3)}),")
+        out.append(f"{P(ind + 2)});")
         out.append(f"{P(ind + 1)}}}")
         out.append(f"{P(ind)}}}")
         out.append("")
@@ -198,8 +239,17 @@ class Transpiler:
             out.append("}")
         return out
 
+    def s_Goto(self, node, ind):
+        names = getattr(self, "screen_names", None) or set()
+        if node.target not in names:
+            known = ", ".join(sorted(names)) or "(none)"
+            raise KiteError(
+                f"unknown screen '{node.target}' — app declares: {known}",
+                node.line, node.col)
+        return [f'{P(ind)}__nav = "{node.target}";']
+
     def s_State(self, node, ind):
-        return [f"{P(ind)}var {node.name} = {self.expr(node.value)};"]
+        return [f"{P(ind)}dynamic {node.name} = {self.expr(node.value)};"]
 
     def s_Screen(self, node, ind):
         raise KiteError("screen can only appear inside an app block",
@@ -273,7 +323,8 @@ class Transpiler:
                 f"[{self.expr(node.index, ind, False)}]")
 
     def e_Attr(self, node, ind, w):
-        return f"{self.expr(node.obj, ind, False)}.{node.name}"
+        return (f"{self.expr(node.obj, ind, False)}"
+                f"[{dart_str(node.name)}]")
 
     def e_Make(self, node, ind, w):
         params = ", ".join(node.params)
@@ -420,9 +471,20 @@ class Transpiler:
                     f"{IND * inner_ind}],\n"
                     f"{IND * (ind + 1)})")
         if name == "text":
-            return f"Text({args[0] if args else '\"\"'})"
+            label = args[0] if args else '""'
+            extra = ""
+            if len(args) >= 2 and args[1] != "null":
+                style = f"fontSize: {args[1]}"
+                if len(args) >= 3 and args[2] not in ("null", ""):
+                    style += f", color: {dart_color(args[2].strip(chr(34)))}"
+                extra = f",\n{IND * inner_ind}style: TextStyle({style})"
+            return f"Text({label}{extra})"
         if name == "btn":
             label = args[0] if args else '"?"'
+            style = ""
+            if len(args) >= 2 and args[1] not in ("null", ""):
+                style = (f"\n{IND * inner_ind}style: ElevatedButton.styleFrom("
+                         f"backgroundColor: {dart_color(args[1].strip(chr(34)))}),")
             body = []
             if node.block:
                 for s in node.block.stmts:
@@ -434,7 +496,13 @@ class Transpiler:
                     f"{body_text}\n"
                     f"{IND * (inner_ind + 1)}}});\n"
                     f"{IND * inner_ind}}},\n"
-                    f"{IND * (inner_ind)}child: Text({label}),\n"
+                    f"{IND * (inner_ind)}child: Text({label}),{style}\n"
+                    f"{IND * (ind + 1)})")
+        if name == "bar":
+            value = args[0] if args else "0"
+            return (f"LinearProgressIndicator(\n"
+                    f"{IND * (inner_ind)}value: ({value}).clamp(0.0, 1.0)"
+                    f".toDouble(),\n"
                     f"{IND * (ind + 1)})")
         if name == "input":
             hint = args[0] if args else '""'

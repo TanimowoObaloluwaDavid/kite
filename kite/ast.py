@@ -166,6 +166,12 @@ class State(Node):
 @dataclass
 class Screen(Node):
     body: Block = None
+    name: str = ""
+
+
+@dataclass
+class Goto(Node):
+    target: str = ""
 
 
 @dataclass

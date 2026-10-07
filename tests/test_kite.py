@@ -207,9 +207,105 @@ def test_transpile_snippet():
     }
     """
     dart = transpile(parse(src))
-    assert "var n = 0;" in dart
+    assert "dynamic n = 0;" in dart
     assert "Text(" in dart
     assert "n += 1" in dart
+
+
+def test_named_screens_and_goto():
+    from kite.interp import run_program
+    import io, contextlib
+
+    src = """
+    app Nav {
+      state n = 0
+      screen Home { col { text("home") btn("go") { goto About } } }
+      screen About { col { text("about") btn("back") { goto Home } } }
+    }
+    """
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        run_program(parse(src))
+    out = buf.getvalue()
+    assert "--- Home ---" in out
+    assert "--- About ---" in out
+    assert "btn: go" in out
+
+    dart = transpile(parse(src))
+    assert "dynamic __nav = \"Home\";" in dart
+    assert "== \"Home\"" in dart and "== \"About\"" in dart
+    assert "__nav = \"About\";" in dart
+    assert "Scaffold(" in dart and "SafeArea(" in dart
+
+
+def test_goto_unknown_screen_error():
+    from kite.transpile import transpile, KiteError
+    try:
+        transpile(parse("""
+        app A {
+          screen Home { col { text("x") btn("go") { goto Missing } } }
+        }
+        """))
+    except KiteError as e:
+        assert "Unknown screen" in str(e) or "unknown screen" in str(e)
+        return
+    assert False, "expected KiteError for unknown screen"
+
+
+def test_custom_widget_components():
+    src = """
+    app App {
+      state n = 0
+      make optionBtn(label, ok) {
+        ret btn(label) {
+          when ok { n += 1 }
+        }
+      }
+      screen {
+        col {
+          each q in [1, 2] {
+            optionBtn("opt {q}", true)
+          }
+        }
+      }
+    }
+    """
+    dart = transpile(parse(src))
+    assert "dynamic optionBtn(var label, var ok) {" in dart
+    assert "ElevatedButton(" in dart
+    assert "if (ok)" in dart
+    assert "n += 1" in dart
+
+
+def test_bar_and_text_style_widgets():
+    dart = transpile(parse("""
+    app App {
+      state n = 1
+      screen {
+        col {
+          bar(n / 10)
+          text("hi", 20, "#ff5f57")
+        }
+      }
+    }
+    """))
+    assert "LinearProgressIndicator(" in dart
+    assert "value: ((n / 10)).clamp(0.0, 1.0).toDouble()," in dart
+    assert "Text(\"hi\"" in dart
+    assert "fontSize: 20" in dart
+    assert "Color(0xFFff5f57)" in dart
+
+
+def test_attr_transpiles_to_bracket_index():
+    dart = transpile(parse("""
+    app App {
+      set data = #{ q: "hi", a: 1 }
+      screen {
+        col { text(data.q) }
+      }
+    }
+    """))
+    assert "data[\"q\"]" in dart
 
 
 if __name__ == "__main__":

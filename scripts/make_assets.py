@@ -373,9 +373,255 @@ def make_banner():
     print("banner.png")
 
 
+# ------------------------------------------------------- quiz phone GIF
+
+QUIZ_PURPLE = "#5E5CE6"
+QUIZ_GREEN = "#35B88E"
+QUIZ_INK = "#24292F"
+QUIZ_GREY = "#6E6E73"
+QUIZ_CARD = "#F2F2F7"
+
+
+def quiz_phone(d, screen, qi=1, score=0, total=2,
+               answered=None, pressed=None):
+    d.rectangle([0, 0, PW, PH], fill="#0d1117")
+    x0, y0, x1, y1 = 30, 20, PW - 30, PH - 20
+    rounded(d, [x0, y0, x1, y1], 40, fill="#ffffff", outline="#30363d",
+            width=4)
+    d.rounded_rectangle([PW // 2 - 55, y0 + 8, PW // 2 + 55, y0 + 32],
+                        radius=12, fill="#0d1117")
+    fs = font(SANS_SB, 14)
+    d.text((x0 + 26, y0 + 14), "9:41", font=fs, fill="#1f2328")
+    for i in range(4):
+        d.rectangle([x1 - 70 + i * 7, y0 + 24 - i * 3, x1 - 66 + i * 7,
+                     y0 + 26], fill="#1f2328")
+
+    cx = PW // 2
+    f_big = font(SANS_B, 30)
+    f_mid = font(SANS_B, 20)
+    f_body = font(SANS, 17)
+    f_small = font(SANS, 14)
+    f_bar = font(MONO_B, 16)
+
+    def option(cy, label, hot=False, correct=False, wrong=False,
+               revealed=False):
+        bw, bh = 250, 58
+        bx0, by0 = cx - bw // 2, cy - bh // 2
+        fill = "#F2F2F7"
+        edge = "#1f2328"
+        if hot:
+            fill = "#5E5CE6"
+            edge = "#5E5CE6"
+        if revealed:
+            fill = QUIZ_GREEN if correct else ("#FF3B30" if wrong else "#F2F2F7")
+            edge = fill
+        rounded(d, [bx0, by0, bx0 + bw, by0 + bh], 14, fill=fill,
+                outline=edge, width=2)
+        d.text((cx, cy), label, font=f_body,
+               fill="white" if (hot or revealed and (correct or wrong))
+               else QUIZ_INK, anchor="mm")
+
+    if screen == "home":
+        d.text((cx, y0 + 120), "KiteQuiz", font=f_big, fill=QUIZ_PURPLE,
+               anchor="mm")
+        d.text((cx, y0 + 165), "A multi-screen app", font=f_small,
+               fill=QUIZ_GREY, anchor="mm")
+        d.text((cx, y0 + 185), "written in Kite", font=f_small,
+               fill=QUIZ_GREY, anchor="mm")
+        bw, bh = 210, 62
+        bx0, by0 = cx - bw // 2, y0 + 300 - bh // 2
+        fill = QUIZ_GREEN
+        if pressed == "start":
+            fill = "#2a9a72"
+        rounded(d, [bx0, by0, bx0 + bw, by0 + bh], 14, fill=fill)
+        d.text((cx, y0 + 300), "Start the quiz", font=f_small, fill="white",
+               anchor="mm")
+
+    elif screen == "quiz":
+        d.text((cx, y0 + 60), f"{qi} of {total}", font=f_small, fill=QUIZ_GREY,
+               anchor="mm")
+        d.rounded_rectangle([cx - 110, y0 + 82, cx + 110, y0 + 92], radius=5,
+                            fill="#E5E5EA")
+        d.rounded_rectangle([cx - 110, y0 + 82,
+                             cx - 110 + 220 * qi // total, y0 + 92],
+                            radius=5, fill=QUIZ_PURPLE)
+        d.text((cx, y0 + 130), "What language originally", font=f_body,
+               fill=QUIZ_INK, anchor="mm")
+        d.text((cx, y0 + 155), "created the World Wide Web?",
+               font=f_body, fill=QUIZ_INK, anchor="mm")
+
+        opts = ["Python", "HTML", "C", "JavaScript"]
+        correct_idx = 3
+        for i, o in enumerate(opts):
+            cy = y0 + 240 + i * 80
+            hot = pressed == o
+            correct = i == correct_idx and answered is not None
+            wrong = answered == o and i != correct_idx
+            option(cy, o, hot=hot, correct=correct, wrong=wrong,
+                   revealed=answered is not None)
+
+        d.text((cx, y0 + 610), "Score: {score}", font=f_small, fill=QUIZ_GREY,
+               anchor="mm")
+
+    elif screen == "result":
+        d.text((cx, y0 + 120), "Quiz complete", font=f_mid, fill=QUIZ_INK,
+               anchor="mm")
+        score_col = QUIZ_GREEN if score >= 2 else QUIZ_PURPLE
+        d.text((cx, y0 + 175), "{score} / {total} correct", font=f_big,
+               fill=score_col, anchor="mm")
+        d.rounded_rectangle([cx - 110, y0 + 225, cx + 110, y0 + 235], radius=5,
+                            fill="#E5E5EA")
+        d.rounded_rectangle([cx - 110, y0 + 225,
+                             cx - 110 + 220 * score // total, y0 + 235],
+                            radius=5, fill=QUIZ_GREEN)
+        msg = "Excellent work!" if score >= 2 else "Keep practising!"
+        d.text((cx, y0 + 275), msg, font=f_body, fill=QUIZ_INK, anchor="mm")
+        bw, bh = 210, 62
+        bx0, by0 = cx - bw // 2, y0 + 350 - bh // 2
+        fill = QUIZ_PURPLE
+        if pressed == "again":
+            fill = "#4f4dbf"
+        rounded(d, [bx0, by0, bx0 + bw, by0 + bh], 14, fill=fill)
+        d.text((cx, y0 + 350), "Play again", font=f_small, fill="white",
+               anchor="mm")
+
+    d.rounded_rectangle([PW // 2 - 60, y1 - 26, PW // 2 + 60, y1 - 18],
+                        radius=4, fill="#1f2328")
+
+
+def quiz_phone_frames():
+    frames = []
+
+    def snap(screen, **kw):
+        img = Image.new("RGB", (PW, PH), "#010409")
+        d = ImageDraw.Draw(img)
+        quiz_phone(d, screen, **kw)
+        return img
+
+    def hold(screen, n, **kw):
+        for _ in range(n):
+            frames.append(snap(screen, **kw))
+
+    hold("home", 14)
+    hold("home", 4, pressed="start")
+    hold("quiz", 10)
+
+    # answer Python (wrong, 3rd option is right) -> reveal
+    hold("quiz", 4, pressed="Python")
+    hold("quiz", 6, answered="Python", score=0)
+    # tap JavaScript (right) on q2 -> correct
+    hold("quiz", 8, answered="Python", score=0)
+    hold("quiz", 20, qi=2, score=0)
+    hold("quiz", 4, qi=2, score=0, pressed="JavaScript")
+    hold("quiz", 6, qi=2, score=0, answered="JavaScript")
+
+    # result
+    hold("result", 10, qi=2, score=1)
+    hold("result", 4, qi=2, score=1, pressed="again")
+    hold("home", 12)
+    return frames
+
+
+# ---------------------------------------------- quiz terminal preview GIF
+
+QUIZ_CODE = [
+    '// quiz.kite — the KiteQuiz app (v0.2)',
+    'app Quiz {',
+    '  state qi = 0      state score = 0',
+    '',
+    '  make optionBtn(label, ok) {',
+    '    ret btn(label) {',
+    '      when ok { score += 1 }',
+    '      when qi + 1 >= len(questions) { goto Result }',
+    '    }',
+    '  }',
+    '',
+    '  screen Home  { col { ... } }',
+    '  screen Quiz  { col { each opt { optionBtn(...) } } }',
+    '  screen Result{ col { bar(score / len(questions)) } }',
+    '}',
+]
+
+QUIZ_OUTPUT = [
+    ("$ kite run examples/quiz.kite", FG),
+    ("--- app Quiz · 3 screens ---", CYAN),
+    ("--- Home ---", BLUE),
+    ("  col {", DIM),
+    ("    text: KiteQuiz   [size 42] [color #5E5CE6]", FG),
+    ("    btn: Start the quiz", FG),
+    ("  }", DIM),
+    ("--- Quiz ---", BLUE),
+    ("  col {", DIM),
+    ("    bar: [###--------------] 25%", FG),
+    ("    text: What language created the WWW?", FG),
+    ("  }", DIM),
+    ("--- Result ---", BLUE),
+    ("  col {", DIM),
+    ("    text: Quiz complete  [size 32]", FG),
+    ("  }", DIM),
+    ("--- end preview ---", CYAN),
+    ("$ kite build quiz.kite", FG),
+    ("wrote quiz.dart  →  flutter run", GREEN),
+]
+
+
+def quiz_terminal_frames():
+    frames = []
+    prompt = "$ "
+    typable = "kite run examples/quiz.kite"
+
+    def base():
+        img, d = new_frame(TERM_W, TERM_H)
+        title_bar(d, TERM_W, "quiz.kite — multi-screen Kite app")
+        return img, d
+
+    for k in range(8):
+        img, d = base()
+        draw_code(d, QUIZ_CODE, 24, 56)
+        if k % 2 == 0:
+            d.rectangle([24 + 2, 56 + 13 * 26 + 4, 24 + 11,
+                         56 + 13 * 26 + 22], fill=FG)
+        frames.append(img)
+
+    for n in range(1, len(typable) + 1):
+        img, d = base()
+        draw_code(d, QUIZ_CODE, 24, 56)
+        f = font(MONO, 17)
+        y = 56 + len(QUIZ_CODE) * 26 + 6
+        d.text((24, y), prompt + typable[:n], font=f, fill=GREEN)
+        w = d.textlength(prompt + typable[:n], font=f)
+        if n < len(typable) and n % 2 == 0:
+            d.rectangle([24 + w + 1, y + 3, 24 + w + 10, y + 21], fill=FG)
+        frames.append(img)
+
+    for k in range(1, len(QUIZ_OUTPUT) + 1):
+        img, d = base()
+        draw_code(d, QUIZ_CODE, 24, 56)
+        f = font(MONO, 17)
+        y0 = 56 + len(QUIZ_CODE) * 26 + 6
+        d.text((24, y0), prompt + typable, font=f, fill=GREEN)
+        for i in range(k):
+            txt, col = QUIZ_OUTPUT[i]
+            d.text((24, y0 + (i + 1) * 24), txt, font=f, fill=col)
+        frames.append(img)
+
+    img, d = base()
+    draw_code(d, QUIZ_CODE, 24, 56)
+    f = font(MONO, 17)
+    y0 = 56 + len(QUIZ_CODE) * 26 + 6
+    d.text((24, y0), prompt + typable, font=f, fill=GREEN)
+    for i, (txt, col) in enumerate(QUIZ_OUTPUT):
+        d.text((24, y0 + (i + 1) * 24), txt, font=f, fill=col)
+    frames.extend(img for _ in range(16))
+
+    return frames
+
+
 if __name__ == "__main__":
     make_logo()
     make_banner()
     save_gif(terminal_frames(), "terminal.gif", duration=75)
     save_gif(phone_frames(), "counter.gif", duration=140)
+    save_gif(quiz_phone_frames(), "quiz.gif", duration=150)
+    save_gif(quiz_terminal_frames(), "quiz-terminal.gif", duration=80)
     print("done")
