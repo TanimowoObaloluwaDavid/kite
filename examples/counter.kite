@@ -1,0 +1,23 @@
+// Kite counter app — mobile UI with reactive state
+app Counter {
+  state count = 0
+  state name = "friend"
+
+  screen {
+    col {
+      spacer(24)
+      text("Hello, {name}!")
+      text("You tapped {count} times")
+      spacer(12)
+      btn("Add +1") {
+        count += 1
+      }
+      btn("Reset") {
+        count = 0
+      }
+      btn("Say hi") {
+        name = "Kite"
+      }
+    }
+  }
+}

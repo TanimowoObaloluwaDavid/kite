@@ -1,0 +1,21 @@
+// Plain script — runs in the interpreter, no UI needed
+
+make fib(n) {
+  when n < 2 {
+    ret n
+  }
+  ret fib(n - 1) + fib(n - 2)
+}
+
+each i in 0..10 {
+  print("fib({i}) = {fib(i)}")
+}
+
+set items = ["apple", "banana", "cherry"]
+each fruit in items {
+  print(fruit.upper())
+}
+
+set user = #{name: "Ada", age: 36}
+print("user: {user.name}, age {user.age}")
+print(type(user))

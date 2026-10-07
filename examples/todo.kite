@@ -1,0 +1,28 @@
+// A slightly bigger UI: a to-do list
+app Todo {
+  state title = ""
+  state tasks = ["Learn Kite", "Build an app"]
+  state done = 0
+
+  screen {
+    col {
+      spacer(20)
+      text("My Tasks ({len(tasks)})")
+      spacer(8)
+      each t in tasks {
+        text("[ ] {t}")
+      }
+      spacer(8)
+      text("Completed: {done}")
+      spacer(12)
+      btn("Add task") {
+        tasks.push("New task {len(tasks) + 1}")
+      }
+      btn("Finish one") {
+        when len(tasks) > 0 {
+          done += 1
+        }
+      }
+    }
+  }
+}
